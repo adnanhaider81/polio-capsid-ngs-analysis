@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: Please cite this code and the associated manuscript.
+title: Comparative evaluation of whole-capsid NGS and conventional GPLN post-culture workflows
+authors:
+  - family-names: Haider
+    given-names: Syed Adnan
+version: 1.0.0
+date-released: 2025-09-29
+preferred-citation:
+  type: article
+  title: Comparative Evaluation of Whole-Capsid Next-Generation Sequencing and Traditional Methods in Post-Culture Polio Surveillance: Pakistan and Afghanistan Study (2021–2024)
+  authors:
+    - family-names: Haider
+      given-names: Syed Adnan
+    - family-names: Jamal
+      given-names: Zunera
+    - family-names: Umair
+      given-names: Massab
+  year: 2025
+  journal: Manuscript PV_V3

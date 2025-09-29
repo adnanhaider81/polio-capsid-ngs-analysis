@@ -1,0 +1,29 @@
+name: polio-capsid-env
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python=3.11
+  - pandas
+  - numpy
+  - scipy
+  - statsmodels
+  - matplotlib
+  - biopython
+  - pyyaml
+  - snakemake
+  - fastp=0.23.2
+  - bwa
+  - samtools
+  - bcftools
+  - freebayes
+  - bedtools
+  - picard
+  - bamclipper
+  - mafft
+  - iqtree
+  - spades=3.15.5
+  - seqkit
+  - blast
+  - entrez-direct

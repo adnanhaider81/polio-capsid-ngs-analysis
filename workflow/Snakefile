@@ -1,0 +1,178 @@
+# Snakemake pipeline for post-culture whole-capsid poliovirus NGS analysis
+# Requires NCBI_EMAIL for Entrez fetching
+
+import yaml, os
+cfg = yaml.safe_load(open("config/config.yaml"))
+
+SAMPLES = [x.get("sample","PV1_001") for x in cfg.get("pairs", [{"sample":"PV1_001","r1":"data-private/PV1_001_R1.fastq.gz","r2":"data-private/PV1_001_R2.fastq.gz"}])]
+META = {x.get("sample","PV1_001"): x for x in cfg.get("pairs", [])}
+if not META:
+    META = {"PV1_001": {"r1":"data-private/PV1_001_R1.fastq.gz","r2":"data-private/PV1_001_R2.fastq.gz"}}
+
+THREADS = cfg["params"]["threads"]
+MINLEN = cfg["params"]["min_len"]
+MINQUAL = cfg["params"]["min_qual"]
+MINDEPTH = cfg["params"]["min_depth_consensus"]
+MODEL = cfg["params"]["iqtree_model"]
+BOOT = cfg["params"]["bootstrap"]
+USE_MF = cfg["params"].get("use_model_finder", False)
+
+REFS = cfg["references"]
+CTX = cfg["context_acc"]
+
+rule all:
+    input:
+        expand("results/consensus/{s}.fa", s=SAMPLES),
+        "results/consensus/all_consensus.fasta",
+        "results/aln/wg_alignment.fasta",
+        "results/iqtree/wg.treefile",
+        expand("results/mutations/{s}_ag_sites.tsv", s=SAMPLES)
+
+rule fastp:
+    input:
+        r1=lambda w: META[w.s]["r1"],
+        r2=lambda w: META[w.s]["r2"]
+    output:
+        r1="work/{s}.R1.trim.fastq.gz",
+        r2="work/{s}.R2.trim.fastq.gz",
+        html="work/{s}.fastp.html",
+        json="work/{s}.fastp.json"
+    threads: THREADS
+    shell:
+        "fastp -i {input.r1} -I {input.r2} -o {output.r1} -O {output.r2} -w {threads} -l {MINLEN} -h {output.html} -j {output.json}"
+
+rule fetch_refs:
+    output:
+        "refs/WPV1.fasta",
+        "refs/Sabin1.fasta",
+        "refs/Sabin2.fasta",
+        "refs/Sabin3.fasta"
+    run:
+        open("config/ref_acc.txt","w").write("\\n".join([REFS["wpv1"], REFS["sabin1"], REFS["sabin2"], REFS["sabin3"]]))
+        shell("python analysis/scripts/fetch_genbank.py --acc config/ref_acc.txt --out_fasta refs/all_refs.fasta && "
+              "seqkit grep -n -p {wpv1} refs/all_refs.fasta > refs/WPV1.fasta && "
+              "seqkit grep -n -p {s1} refs/all_refs.fasta > refs/Sabin1.fasta && "
+              "seqkit grep -n -p {s2} refs/all_refs.fasta > refs/Sabin2.fasta && "
+              "seqkit grep -n -p {s3} refs/all_refs.fasta > refs/Sabin3.fasta".format(
+                  wpv1=REFS["wpv1"], s1=REFS["sabin1"], s2=REFS["sabin2"], s3=REFS["sabin3"]
+              ))
+
+rule map_bwa_each_ref:
+    input:
+        r1="work/{s}.R1.trim.fastq.gz",
+        r2="work/{s}.R2.trim.fastq.gz",
+        ref="refs/{ref}.fasta"
+    output:
+        bam="work/{s}.{ref}.sorted.bam"
+    threads: THREADS
+    shell:
+        "bwa index {input.ref} && "
+        "bwa mem -t {threads} {input.ref} {input.r1} {input.r2} | samtools sort -@ {threads} -o {output.bam} && "
+        "picard MarkDuplicates I={output.bam} O=work/{wildcards.s}.{wildcards.ref}.dedup.bam M=work/{wildcards.s}.{wildcards.ref}.dupmetrics.txt VALIDATION_STRINGENCY=SILENT REMOVE_SEQUENCING_DUPLICATES=false && "
+        "samtools index work/{wildcards.s}.{wildcards.ref}.dedup.bam"
+
+rule clip_primers:
+    input:
+        bam="work/{s}.{ref}.dedup.bam",
+        ref="refs/{ref}.fasta"
+    output:
+        bam="work/{s}.{ref}.clipped.bam"
+    params:
+        bed="env/panPV_primers.bed"
+    threads: 2
+    shell:
+        "bamclipper.sh -b {input.bam} -p {params.bed} -n 8 && mv {input.bam}.primerclipped.bam {output.bam} && samtools index {output.bam}"
+
+rule depth:
+    input:
+        bam="work/{s}.{ref}.clipped.bam"
+    output:
+        depth="results/coverage/{s}.{ref}.depth.txt"
+    shell:
+        "mkdir -p results/coverage && bedtools genomecov -d -ibam {input.bam} > {output.depth}"
+
+rule call_consensus:
+    input:
+        bam="work/{s}.{ref}.clipped.bam",
+        ref="refs/{ref}.fasta"
+    output:
+        vcf="work/{s}.{ref}.vcf.gz",
+        cons="work/{s}.{ref}.cons.fa"
+    params:
+        min_dp=MINDEPTH
+    threads: THREADS
+    shell:
+        "freebayes -f {input.ref} {input.bam} | bcftools view -Oz -o {output.vcf} && bcftools index {output.vcf} && "
+        "samtools depth -a {input.bam} | awk -v OFS='\\t' -v MIN={params.min_dp} '{{ if ($3<MIN) print $1, $2-1, $2 }}' > work/{wildcards.s}.{wildcards.ref}.mask.bed && "
+        "bcftools consensus -f {input.ref} -m work/{wildcards.s}.{wildcards.ref}.mask.bed {output.vcf} > {output.cons}"
+
+REFNAMES = ["WPV1","Sabin1","Sabin2","Sabin3"]
+
+rule pick_best_consensus:
+    input:
+        cons=expand("work/{{s}}.{r}.cons.fa", r=REFNAMES)
+    output:
+        best="results/consensus/{s}.fa"
+    run:
+        # Pick the consensus with the longest ungapped sequence as best
+        best_seq = ""
+        best_path = None
+        import Bio.SeqIO as S
+        for p in input.cons:
+            rec = next(S.parse(p, "fasta"))
+            seq = str(rec.seq).replace("N","").replace("-","")
+            if len(seq) > len(best_seq):
+                best_seq = seq
+                best_path = p
+        os.makedirs("results/consensus", exist_ok=True)
+        import shutil
+        shutil.copy(best_path, output.best)
+
+rule combine_consensus:
+    input:
+        expand("results/consensus/{s}.fa", s=SAMPLES)
+    output:
+        "results/consensus/all_consensus.fasta"
+    shell:
+        "cat {input} > {output}"
+
+rule fetch_context:
+    output:
+        "results/refs/context.fasta"
+    run:
+        with open("config/context.txt","w") as f:
+            for acc in CTX:
+                f.write(acc + "\\n")
+        shell("python analysis/scripts/fetch_genbank.py --acc config/context.txt --out_fasta {output}")
+
+rule align_wg:
+    input:
+        cons="results/consensus/all_consensus.fasta",
+        ctx="results/refs/context.fasta"
+    output:
+        "results/aln/wg_alignment.fasta"
+    shell:
+        "mkdir -p results/aln && cat {input.cons} {input.ctx} > results/aln/wg_input.fasta && mafft --auto results/aln/wg_input.fasta > {output}"
+
+rule iqtree_wg:
+    input:
+        aln="results/aln/wg_alignment.fasta"
+    output:
+        tree="results/iqtree/wg.treefile"
+    params:
+        model=MODEL,
+        bb=BOOT,
+        mf=" -m MFP" if USE_MF else ""
+    threads: 2
+    shell:
+        "mkdir -p results/iqtree && iqtree -s {input.aln} {params.mf} -m {params.model} -bb {params.bb} -nt {threads} -pre results/iqtree/wg"
+
+rule antigenic_sites:
+    input:
+        cons="results/consensus/{s}.fa"
+    output:
+        tsv="results/mutations/{s}_ag_sites.tsv"
+    params:
+        ref="V01150.1"
+    shell:
+        "python analysis/scripts/antigenic_sites.py --ref_acc {params.ref} --genomes {input.cons} --out_tsv {output.tsv}"

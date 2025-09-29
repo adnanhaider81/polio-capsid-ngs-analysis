@@ -1,0 +1,25 @@
+pairs:
+  - sample: PV1_001
+    r1: data-private/PV1_001_R1.fastq.gz
+    r2: data-private/PV1_001_R2.fastq.gz
+
+references:
+  wpv1: KY941935.1
+  sabin1: V01150.1
+  sabin2: AY184220.1
+  sabin3: AY184221.1
+
+context_acc:
+  - KY941935.1
+  - V01150.1
+  - AY184220.1
+  - AY184221.1
+
+params:
+  threads: 4
+  min_len: 50
+  min_qual: 20
+  min_depth_consensus: 10
+  iqtree_model: GTR+G+I
+  bootstrap: 1000
+  use_model_finder: false
