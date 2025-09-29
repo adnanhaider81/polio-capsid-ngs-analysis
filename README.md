@@ -1,6 +1,6 @@
-# Comparative Evaluation of Whole-Capsid NGS and Traditional GPLN Methods in Post-Culture Polio Surveillance - Pakistan and Afghanistan Study
+# Comparative Evaluation of Whole-Capsid NGS and Traditional GPLN Methods in Polio Surveillance
 
-Reproducible analysis and workflows aligned to the manuscript "Comparative Evaluation of Whole-Capsid Next-Generation Sequencing and Traditional Methods in Post-Culture Polio Surveillance: Pakistan and Afghanistan Study (2021-2024)". The repository implements the Illumina whole-capsid approach after culture and provides comparable outputs to conventional ITD plus Sanger VP1.
+The repository implements the Illumina whole-capsid approach after culture and provides comparable outputs to conventional GPLN. 
 
 ## Program summary
 This repository contains one end to end pipeline that can reproduce the analyses reported in the manuscript. It supports the following components under one roof:
