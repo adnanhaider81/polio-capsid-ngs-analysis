@@ -98,8 +98,7 @@ params:
 - Optional de novo outputs under `results/spades/<sample>/` with QC tables and BLAST hits
 
 ## How to cite
-- Manuscript: Comparative Evaluation of Whole-Capsid Next-Generation Sequencing and Traditional Methods in Post-Culture Polio Surveillance: Pakistan and Afghanistan Study 2021-2024. Manuscript PV_V3, 2025. Include the URL of the published version once available.
-- Software: Haider SA. Polio whole-capsid post-culture NGS analysis pipeline. Version 1.0.0. 2025. GitHub repository. Include commit hash when available.
+- Software: Haider SA. Polio whole-capsid post-culture NGS analysis pipeline. Version 1.0.0. 2025. GitHub repository.
 
 ## References
 - Chen S, Zhou Y, Chen Y, et al. fastp: an ultra-fast all-in-one FASTQ preprocessor. Bioinformatics. 2018.
