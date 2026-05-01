@@ -1,14 +1,16 @@
 cff-version: 1.2.0
 message: Please cite this code and the associated manuscript.
 title: Comparative evaluation of whole-capsid NGS and conventional GPLN post-culture workflows
+repository-code: "https://github.com/adnanhaider81/polio-capsid-ngs-analysis"
+license: MIT
 authors:
   - family-names: Haider
     given-names: Syed Adnan
-version: 1.0.0
-date-released: 2025-09-29
+version: 1.0.1
+date-released: 2026-04-30
 preferred-citation:
   type: article
-  title: Comparative Evaluation of Whole-Capsid Next-Generation Sequencing and Traditional Methods in Post-Culture Polio Surveillance: Pakistan and Afghanistan Study (2021–2024)
+  title: "Comparative Evaluation of Whole-Capsid Next-Generation Sequencing and Traditional Methods in Post-Culture Polio Surveillance: Pakistan and Afghanistan Study (2021–2024)"
   authors:
     - family-names: Haider
       given-names: Syed Adnan

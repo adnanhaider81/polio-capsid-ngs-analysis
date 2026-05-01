@@ -1,0 +1,31 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+
+# Workflow state and generated outputs
+.snakemake/
+logs/
+refs/
+results/
+work/
+config/context.txt
+config/ref_acc.txt
+
+# Private sequencing inputs and large intermediate files
+data-private/
+*.fastq
+*.fastq.gz
+*.fq
+*.fq.gz
+*.sam
+*.bam
+*.bai
+*.cram
+*.vcf
+*.vcf.gz
+*.bcf
+
+# Local system files
+.DS_Store
+Thumbs.db

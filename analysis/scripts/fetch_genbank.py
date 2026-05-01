@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
-import argparse, time, os
+import argparse
+import os
+from pathlib import Path
+import time
+
 from Bio import Entrez
+
 
 def main():
     ap = argparse.ArgumentParser(description='Fetch GenBank FASTA by accession list')
@@ -18,14 +23,22 @@ def main():
     if api_key:
         Entrez.api_key = api_key
 
-    accs = [x.strip() for x in open(args.acc) if x.strip() and not x.startswith('#')]
-    with open(args.out_fasta, 'w') as out:
+    accs = []
+    with open(args.acc) as handle:
+        for line in handle:
+            line = line.strip()
+            if line and not line.startswith('#'):
+                accs.append(line)
+
+    out_path = Path(args.out_fasta)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with out_path.open('w') as out:
         for acc in accs:
             h = Entrez.efetch(db='nucleotide', id=acc, rettype='fasta', retmode='text')
             out.write(h.read())
             h.close()
             time.sleep(0.34)
-    print(f'Wrote {args.out_fasta}')
+    print(f'Wrote {out_path}')
 
 if __name__ == '__main__':
     main()

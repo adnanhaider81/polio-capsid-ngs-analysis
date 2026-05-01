@@ -1,8 +1,11 @@
 # Snakemake pipeline for post-culture whole-capsid poliovirus NGS analysis
 # Requires NCBI_EMAIL for Entrez fetching
 
-import yaml, os
-cfg = yaml.safe_load(open("config/config.yaml"))
+configfile: "config/config.yaml"
+
+import os
+
+cfg = config
 
 SAMPLES = [x.get("sample","PV1_001") for x in cfg.get("pairs", [{"sample":"PV1_001","r1":"data-private/PV1_001_R1.fastq.gz","r2":"data-private/PV1_001_R2.fastq.gz"}])]
 META = {x.get("sample","PV1_001"): x for x in cfg.get("pairs", [])}
@@ -19,6 +22,7 @@ USE_MF = cfg["params"].get("use_model_finder", False)
 
 REFS = cfg["references"]
 CTX = cfg["context_acc"]
+REFNAMES = ["WPV1","Sabin1","Sabin2","Sabin3"]
 
 rule all:
     input:
@@ -26,6 +30,7 @@ rule all:
         "results/consensus/all_consensus.fasta",
         "results/aln/wg_alignment.fasta",
         "results/iqtree/wg.treefile",
+        expand("results/coverage/{s}.{ref}.depth.txt", s=SAMPLES, ref=REFNAMES),
         expand("results/mutations/{s}_ag_sites.tsv", s=SAMPLES)
 
 rule fastp:
@@ -39,7 +44,7 @@ rule fastp:
         json="work/{s}.fastp.json"
     threads: THREADS
     shell:
-        "fastp -i {input.r1} -I {input.r2} -o {output.r1} -O {output.r2} -w {threads} -l {MINLEN} -h {output.html} -j {output.json}"
+        "fastp -i {input.r1} -I {input.r2} -o {output.r1} -O {output.r2} -w {threads} -q {MINQUAL} -l {MINLEN} -h {output.html} -j {output.json}"
 
 rule fetch_refs:
     output:
@@ -48,7 +53,8 @@ rule fetch_refs:
         "refs/Sabin2.fasta",
         "refs/Sabin3.fasta"
     run:
-        open("config/ref_acc.txt","w").write("\\n".join([REFS["wpv1"], REFS["sabin1"], REFS["sabin2"], REFS["sabin3"]]))
+        os.makedirs("refs", exist_ok=True)
+        open("config/ref_acc.txt","w").write("\n".join([REFS["wpv1"], REFS["sabin1"], REFS["sabin2"], REFS["sabin3"]]))
         shell("python analysis/scripts/fetch_genbank.py --acc config/ref_acc.txt --out_fasta refs/all_refs.fasta && "
               "seqkit grep -n -p {wpv1} refs/all_refs.fasta > refs/WPV1.fasta && "
               "seqkit grep -n -p {s1} refs/all_refs.fasta > refs/Sabin1.fasta && "
@@ -63,20 +69,24 @@ rule map_bwa_each_ref:
         r2="work/{s}.R2.trim.fastq.gz",
         ref="refs/{ref}.fasta"
     output:
-        bam="work/{s}.{ref}.sorted.bam"
+        sorted=temp("work/{s}.{ref}.sorted.bam"),
+        dedup="work/{s}.{ref}.dedup.bam",
+        bai="work/{s}.{ref}.dedup.bam.bai",
+        metrics="work/{s}.{ref}.dupmetrics.txt"
     threads: THREADS
     shell:
         "bwa index {input.ref} && "
-        "bwa mem -t {threads} {input.ref} {input.r1} {input.r2} | samtools sort -@ {threads} -o {output.bam} && "
-        "picard MarkDuplicates I={output.bam} O=work/{wildcards.s}.{wildcards.ref}.dedup.bam M=work/{wildcards.s}.{wildcards.ref}.dupmetrics.txt VALIDATION_STRINGENCY=SILENT REMOVE_SEQUENCING_DUPLICATES=false && "
-        "samtools index work/{wildcards.s}.{wildcards.ref}.dedup.bam"
+        "bwa mem -t {threads} {input.ref} {input.r1} {input.r2} | samtools sort -@ {threads} -o {output.sorted} && "
+        "picard MarkDuplicates I={output.sorted} O={output.dedup} M={output.metrics} VALIDATION_STRINGENCY=SILENT REMOVE_SEQUENCING_DUPLICATES=false && "
+        "samtools index {output.dedup}"
 
 rule clip_primers:
     input:
         bam="work/{s}.{ref}.dedup.bam",
         ref="refs/{ref}.fasta"
     output:
-        bam="work/{s}.{ref}.clipped.bam"
+        bam="work/{s}.{ref}.clipped.bam",
+        bai="work/{s}.{ref}.clipped.bam.bai"
     params:
         bed="env/panPV_primers.bed"
     threads: 2
@@ -103,10 +113,8 @@ rule call_consensus:
     threads: THREADS
     shell:
         "freebayes -f {input.ref} {input.bam} | bcftools view -Oz -o {output.vcf} && bcftools index {output.vcf} && "
-        "samtools depth -a {input.bam} | awk -v OFS='\\t' -v MIN={params.min_dp} '{{ if ($3<MIN) print $1, $2-1, $2 }}' > work/{wildcards.s}.{wildcards.ref}.mask.bed && "
+        "samtools depth -a {input.bam} | awk -v OFS='\t' -v MIN={params.min_dp} '{{ if ($3<MIN) print $1, $2-1, $2 }}' > work/{wildcards.s}.{wildcards.ref}.mask.bed && "
         "bcftools consensus -f {input.ref} -m work/{wildcards.s}.{wildcards.ref}.mask.bed {output.vcf} > {output.cons}"
-
-REFNAMES = ["WPV1","Sabin1","Sabin2","Sabin3"]
 
 rule pick_best_consensus:
     input:
@@ -140,9 +148,10 @@ rule fetch_context:
     output:
         "results/refs/context.fasta"
     run:
+        os.makedirs("results/refs", exist_ok=True)
         with open("config/context.txt","w") as f:
             for acc in CTX:
-                f.write(acc + "\\n")
+                f.write(acc + "\n")
         shell("python analysis/scripts/fetch_genbank.py --acc config/context.txt --out_fasta {output}")
 
 rule align_wg:

@@ -10,13 +10,16 @@ Thanks for your interest in improving this analysis.
 ## Workflow
 1. Fork the repo and create a feature branch.
 2. Make focused changes with clear commit messages.
-3. Dry run before opening a PR:
+3. Run the lightweight checks:
+   ```bash
+   make test
+   ```
+4. Dry run the workflow with a config that points to local FASTQ files:
    ```bash
    conda activate polio-capsid-env
    export NCBI_EMAIL="your@email"
-   snakemake -s workflow/Snakefile -n -c 4
+   snakemake -s workflow/Snakefile --configfile config/config.yaml -n -c 4
    ```
-4. Verify `make test` works.
 5. Open a pull request describing the change and any parameter updates.
 
 ## Code style

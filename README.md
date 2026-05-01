@@ -7,7 +7,7 @@ This repository contains one end to end pipeline that can reproduce the analyses
 - Inputs
   - Paired end FASTQ from cultured isolates prepared for whole capsid sequencing on Illumina MiSeq 2x150.
 - Quality control and trimming
-  - fastp for adapter and quality trimming with default Q30 sliding window and minimum length 50.
+  - fastp for adapter and quality trimming with configurable minimum base quality, default Q20, and minimum length 50.
 - Mapping and primer trimming
   - BWA MEM mapping to references for WPV1 and Sabin strains.
   - BAMClipper to remove primer sequences when amplicon primers are used.
@@ -28,10 +28,12 @@ This repository contains one end to end pipeline that can reproduce the analyses
 
 The workflow is implemented in Snakemake and can be run on a laptop or a small server. No clinical data are included.
 
+Current software version: 1.0.1. See `CHANGELOG.md` and `CITATION.cff` for release metadata.
+
 ## Requirements
-- Python 3.11 or newer
-- Option A: pip and virtualenv
-- Option B: conda or mamba
+- Linux, macOS, or WSL with Bash
+- Python 3.10 or newer for lightweight script checks
+- Conda or mamba for the full workflow environment
 - Snakemake 7 or newer for the full pipeline
 - System tools installed through conda: fastp, bwa, samtools, bcftools, freebayes, bedtools, picard, bamclipper, mafft, iqtree, spades, seqkit, entrez-direct
 
@@ -43,19 +45,36 @@ export NCBI_API_KEY="xxxxxxxxxxxxxxxxxxxxxxxxxxxx"   # optional
 ```
 
 ## Quick verification
+This check validates the Python utilities and example plotting without requiring private FASTQ files.
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
+python -m pip install --upgrade pip
 python -m pip install -r env/requirements.txt
+python -m compileall -q analysis/scripts
 python analysis/scripts/example_qc_plot.py --in data-example/example_counts.tsv --out results-example/example_plot.png
 ```
 
-## One command run
+The same check can be run with:
+```bash
+make test
+```
+
+## Full workflow run
+No raw FASTQ files are included in this repository. Before running the full workflow, edit `config/config.yaml` or pass a separate config file with paths to local paired-end FASTQ files.
+
 ```bash
 export NCBI_EMAIL="you@example.com"
-conda env create -f env/environment.yml
+mamba env create -f env/environment.yml   # or: conda env create -f env/environment.yml
 conda activate polio-capsid-env
-snakemake -s workflow/Snakefile -c 4 --printshellcmds
+snakemake -s workflow/Snakefile --configfile config/config.yaml -n -c 4
+snakemake -s workflow/Snakefile --configfile config/config.yaml -c 4 --printshellcmds
+```
+
+The `make` wrappers accept `THREADS`, `CONFIG`, `PYTHON`, and `SNAKEMAKE` overrides:
+```bash
+make dry CONFIG=config/config.yaml THREADS=4
+make run CONFIG=config/config.yaml THREADS=4
 ```
 
 ## Configuration
@@ -98,7 +117,7 @@ params:
 - Optional de novo outputs under `results/spades/<sample>/` with QC tables and BLAST hits
 
 ## How to cite
-- Software: Haider SA. Polio whole-capsid post-culture NGS analysis pipeline. Version 1.0.0. 2025. GitHub repository.
+- Software: Haider SA. Polio whole-capsid post-culture NGS analysis pipeline. Version 1.0.1. 2026. GitHub repository.
 
 ## References
 - Chen S, Zhou Y, Chen Y, et al. fastp: an ultra-fast all-in-one FASTQ preprocessor. Bioinformatics. 2018.
